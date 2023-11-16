@@ -1,49 +1,58 @@
 package ru.katkova;
 
-import io.restassured.RestAssured;
-import io.restassured.http.ContentType;
+import io.qameta.allure.Step;
+import io.restassured.response.Response;
 import org.junit.jupiter.api.*;
-import ru.katkova.pojo.*;
+import ru.katkova.client.CourierClient;
+import ru.katkova.pojo.CourierLoginResponse;
 
 import java.util.Random;
 
-import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 
-public class CourierTest
+public class CourierTest extends TestsBase
 {
-    @BeforeEach
-    public void setUp()
+    private final CourierClient courierClient;
+
+    public CourierTest()
     {
-        RestAssured.baseURI = "https://qa-scooter.praktikum-services.ru";
+        this.courierClient = new CourierClient();
     }
 
     @Test
+    @DisplayName("Check courier create successful")
     public void createCourierSuccessful()
     {
         String login = "katkova_test_login_" + new Random().nextInt();
         String password = "katkova_test_password";
 
-        given()
-                .when()
-                .contentType(ContentType.JSON)
-                .body(new CourierCreateParameters(login, password, "test_firstname"))
-                .post("/api/v1/courier")
-                .then()
-                .statusCode(201)
-                .and()
-                .body("ok", is(true));
+        Response response = courierClient.createCourier(login, password, "test_firstname");
+        checkCourierCreateSuccessfulResponse(response);
+        cleanUpCreatedCourier(login, password);
+    }
+
+    @Step("Check courier create successful response")
+    private void checkCourierCreateSuccessfulResponse(Response response)
+    {
+        response.then()
+            .statusCode(201)
+            .and()
+            .body("ok", is(true));
     }
 
     @Test
+    @DisplayName("Check login parameter is required for courier creation")
     public void loginIsRequiredForCreateCourier()
     {
-        given()
-                .when()
-                .contentType(ContentType.JSON)
-                .body(new CourierCreateParameters(null, "katkova_test_password", "test_firstname"))
-                .post("/api/v1/courier")
+        Response response = courierClient.createCourier(null, "katkova_test_password", "test_firstname");
+        checkCourierNotEnoughRequiredParamsForCreateResponse(response);
+    }
+
+    @Step("Check courier not enough required parameters for create response")
+    private void checkCourierNotEnoughRequiredParamsForCreateResponse(Response response)
+    {
+        response
                 .then()
                 .statusCode(400)
                 .and()
@@ -51,136 +60,131 @@ public class CourierTest
     }
 
     @Test
+    @DisplayName("Check password parameter is required for courier creation")
     public void passwordIsRequiredForCreateCourier()
     {
-        given()
-                .when()
-                .contentType(ContentType.JSON)
-                .body(new CourierCreateParameters("katkova_test_login", null, "test_firstname"))
-                .post("/api/v1/courier")
-                .then()
-                .statusCode(400)
-                .and()
-                .body("message", is("Недостаточно данных для создания учетной записи"));
+        Response response = courierClient.createCourier("katkova_test_login", null, "test_firstname");
+        checkCourierNotEnoughRequiredParamsForCreateResponse(response);
     }
 
     @Test
+    @DisplayName("Check that create courier with same name is forbidden")
     public void createCourierWithSameLoginIsForbidden()
     {
         String login = "katkova_test_login_" + new Random().nextInt();
         String password = "katkova_test_password";
 
-        given()
-                .when()
-                .contentType(ContentType.JSON)
-                .body(new CourierCreateParameters(login, password, "test_firstname"))
-                .post("/api/v1/courier")
+        courierClient.createCourier(login, password, "test_firstname")
                 .then()
                 .statusCode(201);
 
-        given()
-                .when()
-                .contentType(ContentType.JSON)
-                .body(new CourierCreateParameters(login, password, "test_firstname"))
-                .post("/api/v1/courier")
-                .then()
-                .statusCode(409)
-                .and()
-                .body("message", is("Этот логин уже используется. Попробуйте другой."));
+        Response response = courierClient.createCourier(login, password, "test_firstname");
+        checkCourierCreateForbiddenWithSameName(response);
+
+        cleanUpCreatedCourier(login, password);
+    }
+
+    @Step("Check courier create forbidden with same name response")
+    private void checkCourierCreateForbiddenWithSameName(Response response)
+    {
+        response.then()
+            .statusCode(409)
+            .and()
+            .body("message", is("Этот логин уже используется. Попробуйте другой."));
     }
 
     @Test
+    @DisplayName("Check courier login successful")
     public void courierLoginSuccessful()
     {
         String login = "katkova_test_login_" + new Random().nextInt();
         String password = "katkova_test_password";
 
-        given()
-                .when()
-                .contentType(ContentType.JSON)
-                .body(new CourierCreateParameters(login, password, "test_firstname"))
-                .post("/api/v1/courier")
+        courierClient.createCourier(login, password, "test_firstname")
                 .then()
                 .statusCode(201);
 
-        given()
-                .when()
-                .contentType(ContentType.JSON)
-                .body(new CourierLoginParameters(login, password))
-                .post("/api/v1/courier/login")
-                .then()
+        Response response = courierClient.loginCourier(login, password);
+        checkCourierLoginSuccessfulResponse(response);
+
+        cleanUpCreatedCourier(login, password);
+    }
+
+    @Step("Check courier login successful response")
+    private void checkCourierLoginSuccessfulResponse(Response response)
+    {
+        response.then()
                 .statusCode(200)
                 .and()
                 .body("id", notNullValue());
     }
 
     @Test
+    @DisplayName("Check login parameter is required for courier login")
     public void loginRequiredForCourierLogin()
     {
-        given()
-                .when()
-                .contentType(ContentType.JSON)
-                .body(new CourierLoginParameters(null, "katkova_test_password"))
-                .post("/api/v1/courier/login")
-                .then()
-                .statusCode(400)
-                .and()
-                .body("message", is("Недостаточно данных для входа"));
+        Response response = courierClient.loginCourier(null, "katkova_test_password");
+        checkCourierLoginRequiredParameterResponse(response);
     }
 
     @Test
     @Disabled // request hangs
+    @DisplayName("Check password parameter is required for courier login")
     public void passwordRequiredForCourierLogin()
     {
-        given()
-                .when()
-                .contentType(ContentType.JSON)
-                .body(new CourierLoginParameters("katkova_test_login", null))
-                .post("/api/v1/courier/login")
-                .then()
+        Response response = courierClient.loginCourier("katkova_test_login", null);
+        checkCourierLoginRequiredParameterResponse(response);
+    }
+
+    @Step("Check courier login required parameter response")
+    private void checkCourierLoginRequiredParameterResponse(Response response)
+    {
+        response.then()
                 .statusCode(400)
                 .and()
                 .body("message", is("Недостаточно данных для входа"));
     }
 
     @Test
+    @DisplayName("Check that courier login with wrong login parameter is fail")
     public void courierLoginWithWrongLoginIfFail()
     {
         String login = "katkova_test_login_" + new Random().nextInt();
 
-        given()
-                .when()
-                .contentType(ContentType.JSON)
-                .body(new CourierLoginParameters(login, "katkova_test_password"))
-                .post("/api/v1/courier/login")
-                .then()
-                .statusCode(404)
-                .and()
-                .body("message", is("Учетная запись не найдена"));
+        Response response = courierClient.loginCourier(login, "katkova_test_password");
+        checkCourierLoginWrongParameterResponse(response);
     }
 
     @Test
+    @DisplayName("Check that courier login with wrong password parameter is fail")
     public void courierLoginWithWrongPasswordIfFail()
     {
         String login = "katkova_test_login_" + new Random().nextInt();
         String password = "katkova_test_password";
 
-        given()
-                .when()
-                .contentType(ContentType.JSON)
-                .body(new CourierCreateParameters(login, password, "test_firstname"))
-                .post("/api/v1/courier")
+        courierClient.createCourier(login, password, "test_firstname")
                 .then()
                 .statusCode(201);
 
-        given()
-                .when()
-                .contentType(ContentType.JSON)
-                .body(new CourierLoginParameters(login, password + "_wrong"))
-                .post("/api/v1/courier/login")
-                .then()
+        Response response = courierClient.loginCourier(login, password + "_wrong");
+        checkCourierLoginWrongParameterResponse(response);
+
+        cleanUpCreatedCourier(login, password);
+    }
+
+    @Step("Check courier login wrong parameter response")
+    private void checkCourierLoginWrongParameterResponse(Response response)
+    {
+        response.then()
                 .statusCode(404)
                 .and()
                 .body("message", is("Учетная запись не найдена"));
+    }
+
+    @Step("Delete test courier")
+    private void cleanUpCreatedCourier(String login, String password)
+    {
+        CourierLoginResponse courierLoginResponse = courierClient.loginCourier(login, password).thenReturn().as(CourierLoginResponse.class);
+        courierClient.deleteCourier(courierLoginResponse.getId()).then().statusCode(200);
     }
 }
